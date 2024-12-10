@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -7,14 +7,30 @@ import {
   ScrollView, 
   TouchableOpacity,
   useColorScheme,
+  StatusBar,
+  Alert,
+  ToastAndroid,
+  Platform,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronLeftIcon, TwitterIcon, SunIcon, MoonIcon } from 'lucide-react-native';
+import { ChevronLeftIcon, TwitterIcon, SunIcon, MoonIcon, SaveIcon } from 'lucide-react-native';
+import { theme } from '../styles/globalStyles';
+import { saveAnalysis } from '../utils/storage';
+import * as Haptics from 'expo-haptics';
 
 export default function AnalysisScreen() {
-  const { image } = useLocalSearchParams<{ image: string }>();
-  const colorScheme = useColorScheme();
-  const [isDarkMode, setIsDarkMode] = useState(colorScheme === 'dark');
+  const params = useLocalSearchParams<{ image: string; isDarkMode: string }>();
+  const systemColorScheme = useColorScheme();
+  const [isDarkMode, setIsDarkMode] = useState(
+    params.isDarkMode ? params.isDarkMode === 'true' : systemColorScheme === 'dark'
+  );
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!params.isDarkMode) {
+      setIsDarkMode(systemColorScheme === 'dark');
+    }
+  }, [systemColorScheme, params.isDarkMode]);
 
   const mockAnalysisData = {
     date: '2024-02-16',
@@ -52,26 +68,89 @@ export default function AnalysisScreen() {
     alert('This is just a mock button for now');
   };
 
+  const handleSave = async () => {
+    if (isSaving) return;
+    
+    try {
+      setIsSaving(true);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      const analysisData = {
+        id: Date.now().toString(),
+        date: new Date().toISOString().split('T')[0],
+        productName: mockAnalysisData.productName,
+        imageUri: params.image,
+        result: mockAnalysisData.regulatoryCompliance.isCompliant ? 'Compliant' : 'Non-Compliant',
+        status: 'Completed' as const,
+        compliant: mockAnalysisData.regulatoryCompliance.isCompliant,
+        nutritionFacts: mockAnalysisData.nutritionFacts,
+        regulatoryCompliance: mockAnalysisData.regulatoryCompliance,
+        qualityScore: mockAnalysisData.qualityScore,
+        recommendedActions: mockAnalysisData.recommendedActions,
+      };
+
+      await saveAnalysis(analysisData);
+
+      // Show platform-specific success notification
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Analysis saved successfully', ToastAndroid.SHORT);
+      } else {
+        Alert.alert(
+          'Success',
+          'Analysis saved successfully',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save analysis');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const currentTheme = isDarkMode ? theme.dark : theme.light;
   const styles = createStyles(isDarkMode);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: currentTheme.background }]}>
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        backgroundColor={isDarkMode ? '#1E1E1E' : '#2196F3'}
+      />
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton} 
           onPress={() => router.back()}
         >
-          <ChevronLeftIcon color={isDarkMode ? 'white' : 'white'} size={24} />
+          <ChevronLeftIcon color="white" size={24} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Product Analysis</Text>
-        <TouchableOpacity onPress={toggleDarkMode} style={styles.darkModeToggle}>
-          {isDarkMode ? <SunIcon color="white" size={24} /> : <MoonIcon color="white" size={24} />}
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity 
+            style={[
+              styles.headerButton,
+              isSaving && styles.headerButtonDisabled
+            ]} 
+            onPress={handleSave}
+            disabled={isSaving}
+          >
+            <SaveIcon color="white" size={24} />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.headerButton} 
+            onPress={toggleDarkMode}
+          >
+            {isDarkMode ? 
+              <SunIcon color="white" size={24} /> : 
+              <MoonIcon color="white" size={24} />
+            }
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.imageContainer}>
         <Image 
-          source={{ uri: image }} 
+          source={{ uri: params.image }} 
           style={styles.image} 
           resizeMode="contain" 
         />
@@ -224,5 +303,18 @@ const createStyles = (isDarkMode: boolean) => StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     marginLeft: 10,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerButton: {
+    marginLeft: 15,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  headerButtonDisabled: {
+    opacity: 0.5,
   },
 });
