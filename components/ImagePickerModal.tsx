@@ -6,18 +6,23 @@ import {
   Modal, 
   Pressable,
   StyleSheet,
+  useColorScheme,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraIcon, ImageIcon, PlusIcon } from 'lucide-react-native';
+import { theme } from '../styles/globalStyles';
 
 interface ImagePickerModalProps {
   onImageSelected: (uri: string) => void;
+  isDarkMode?: boolean;
 }
 
 export default function ImagePickerModal({ 
-  onImageSelected 
+  onImageSelected,
+  isDarkMode = useColorScheme() === 'dark'
 }: ImagePickerModalProps) {
   const [isModalVisible, setModalVisible] = useState(false);
+  const currentTheme = isDarkMode ? theme.dark : theme.light;
 
   const openModal = () => setModalVisible(true);
   const closeModal = () => setModalVisible(false);
@@ -74,26 +79,34 @@ export default function ImagePickerModal({
         onRequestClose={closeModal}
       >
         <Pressable 
-          style={styles.modalOverlay} 
+          style={[styles.modalOverlay, { backgroundColor: currentTheme.modalOverlay }]} 
           onPress={closeModal}
         >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Create New Report</Text>
+          <View style={[styles.modalContent, { 
+            backgroundColor: currentTheme.surface,
+          }]}>
+            <Text style={[styles.modalTitle, { 
+              color: currentTheme.text 
+            }]}>Create New Report</Text>
             
             <TouchableOpacity 
-              style={styles.modalOption} 
+              style={[styles.modalOption, { borderBottomColor: currentTheme.border }]} 
               onPress={takePhotoWithCamera}
             >
-              <CameraIcon size={24} color="black" />
-              <Text style={styles.modalOptionText}>Take Photo</Text>
+              <CameraIcon size={24} color={currentTheme.text} />
+              <Text style={[styles.modalOptionText, { color: currentTheme.text }]}>
+                Take Photo
+              </Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.modalOption} 
+              style={[styles.modalOption, { borderBottomColor: currentTheme.border }]} 
               onPress={pickImageFromGallery}
             >
-              <ImageIcon size={24} color="black" />
-              <Text style={styles.modalOptionText}>Choose from Gallery</Text>
+              <ImageIcon size={24} color={currentTheme.text} />
+              <Text style={[styles.modalOptionText, { color: currentTheme.text }]}>
+                Choose from Gallery
+              </Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -107,7 +120,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 20,
     right: 20,
-    backgroundColor: '#007bff',
+    backgroundColor: theme.light.primary,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -121,11 +134,9 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: 'white',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
@@ -142,7 +153,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
   modalOptionText: {
     marginLeft: 15,

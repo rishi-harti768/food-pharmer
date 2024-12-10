@@ -6,30 +6,39 @@ import {
   Image,
   StyleSheet,
   Dimensions,
+  useColorScheme,
 } from 'react-native';
 import { XIcon } from 'lucide-react-native';
 import { router } from 'expo-router';
+import { theme } from '../styles/globalStyles';
 
 interface ImagePreviewProps {
   imageUri: string;
   onClear: () => void;
+  isDarkMode?: boolean;
 }
 
 export default function ImagePreview({ 
   imageUri, 
-  onClear 
+  onClear,
+  isDarkMode = useColorScheme() === 'dark'
 }: ImagePreviewProps) {
+  const currentTheme = isDarkMode ? theme.dark : theme.light;
+
   const proceedToAnalysis = () => {
     router.push({
       pathname: '/analysis',
-      params: { image: imageUri }
+      params: { 
+        image: imageUri, 
+        isDarkMode: isDarkMode ? 'true' : 'false'
+      }
     });
-    onClear(); // Close the modal after navigating
+    onClear();
   };
 
   return (
-    <View style={styles.modalContainer}>
-      <View style={styles.previewContainer}>
+    <View style={[styles.modalContainer, { backgroundColor: currentTheme.modalOverlay }]}>
+      <View style={[styles.previewContainer, { backgroundColor: currentTheme.surface }]}>
         <TouchableOpacity 
           style={styles.clearPreviewButton} 
           onPress={onClear}
@@ -54,7 +63,6 @@ export default function ImagePreview({
   );
 }
 
-
 const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
@@ -62,12 +70,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   previewContainer: {
     width: width * 0.9,
     height: height * 0.7,
-    backgroundColor: 'white',
     borderRadius: 10,
     overflow: 'hidden',
     position: 'relative',
@@ -97,7 +103,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 20,
     alignSelf: 'center',
-    backgroundColor: '#007bff',
+    backgroundColor: theme.light.primary,
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 10,

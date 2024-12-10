@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -7,49 +7,54 @@ import {
   TouchableOpacity, 
   StyleSheet,
   useColorScheme,
-  Animated,
+  StatusBar,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import ImagePickerModal from '../components/ImagePickerModal';
 import ImagePreview from '../components/ImagePreview';
 import { SunIcon, MoonIcon, ArrowRightIcon, ClipboardListIcon } from 'lucide-react-native';
-
-const mockAnalyses = [
-  {
-    id: '1',
-    date: '2024-02-15',
-    productName: 'Protein Shake',
-    imageUri: 'https://example.com/image1.jpg',
-    result: 'Non-Compliant - High Sodium',
-    status: 'Reviewed',
-    compliant: false
-  },
-  {
-    id: '2',
-    date: '2024-02-10',
-    productName: 'Organic Granola',
-    imageUri: 'https://example.com/image2.jpg',
-    result: 'Compliant',
-    status: 'Completed',
-    compliant: true
-  },
-  {
-    id: '3',
-    date: '2024-02-05',
-    productName: 'Frozen Meal',
-    imageUri: 'https://example.com/image3.jpg',
-    result: 'Requires Investigation',
-    status: 'Pending',
-    compliant: false
-  }
-];
+import { theme } from '../styles/globalStyles';
+import { getAnalyses, AnalysisData } from '../utils/storage';
 
 export default function Index() {
+  const systemColorScheme = useColorScheme();
+  const [isDarkMode, setIsDarkMode] = useState(systemColorScheme === 'dark');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isPreviewModalVisible, setPreviewModalVisible] = useState(false);
-  const colorScheme = useColorScheme();
-  const [isDarkMode, setIsDarkMode] = useState(colorScheme === 'dark');
   const [pressedId, setPressedId] = useState<string | null>(null);
+  const [analyses, setAnalyses] = useState<AnalysisData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    setIsDarkMode(systemColorScheme === 'dark');
+  }, [systemColorScheme]);
+
+  const loadAnalyses = async () => {
+    try {
+      const savedAnalyses = await getAnalyses();
+      setAnalyses(savedAnalyses);
+    } catch (error) {
+      console.error('Error loading analyses:', error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  // Load analyses when the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadAnalyses();
+    }, [])
+  );
+
+  const onRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    loadAnalyses();
+  }, []);
 
   const handleImageSelected = (uri: string) => {
     setImagePreview(uri);
@@ -65,21 +70,29 @@ export default function Index() {
     setIsDarkMode(!isDarkMode);
   };
 
-  const navigateToAnalysis = (analysis: typeof mockAnalyses[0]) => {
+  const navigateToAnalysis = (analysis: AnalysisData) => {
     setPressedId(analysis.id);
     setTimeout(() => {
       setPressedId(null);
       router.push({
         pathname: '/analysis',
-        params: { image: analysis.imageUri }
+        params: { 
+          image: analysis.imageUri, 
+          isDarkMode: isDarkMode ? 'true' : 'false'
+        }
       });
     }, 150);
   };
 
+  const currentTheme = isDarkMode ? theme.dark : theme.light;
   const styles = createStyles(isDarkMode);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: currentTheme.background }]}>
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        backgroundColor={isDarkMode ? '#1E1E1E' : '#2196F3'}
+      />
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <ClipboardListIcon color="white" size={28} style={styles.headerIcon} />
@@ -99,61 +112,92 @@ export default function Index() {
       <ScrollView 
         style={styles.analysesContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            tintColor={currentTheme.text}
+            colors={[currentTheme.primary]}
+          />
+        }
       >
-        <Text style={styles.sectionTitle}>Previous Analyses</Text>
-        {mockAnalyses.map((analysis) => (
-          <TouchableOpacity 
-            key={analysis.id} 
-            style={[
-              styles.analysisItem,
-              pressedId === analysis.id && styles.analysisItemPressed,
-              { borderLeftColor: analysis.compliant ? '#4CAF50' : '#F44336' }
-            ]}
-            onPress={() => navigateToAnalysis(analysis)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.analysisDetails}>
-              <View style={styles.analysisHeader}>
-                <View style={styles.dateContainer}>
-                  <Text style={styles.analysisDate}>{analysis.date}</Text>
+        <Text style={[styles.sectionTitle, { color: currentTheme.text }]}>
+          Previous Analyses
+        </Text>
+        
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={currentTheme.primary} />
+          </View>
+        ) : analyses.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyText, { color: currentTheme.textSecondary }]}>
+              No analyses yet. Start by analyzing a product!
+            </Text>
+          </View>
+        ) : (
+          analyses.map((analysis) => (
+            <TouchableOpacity 
+              key={analysis.id} 
+              style={[
+                styles.analysisItem,
+                { backgroundColor: currentTheme.surface },
+                pressedId === analysis.id && styles.analysisItemPressed,
+                { borderLeftColor: analysis.compliant ? '#4CAF50' : '#F44336' }
+              ]}
+              onPress={() => navigateToAnalysis(analysis)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.analysisDetails}>
+                <View style={styles.analysisHeader}>
+                  <View style={[styles.dateContainer, {
+                    backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'
+                  }]}>
+                    <Text style={[styles.analysisDate, { color: currentTheme.textSecondary }]}>
+                      {analysis.date}
+                    </Text>
+                  </View>
+                  <ArrowRightIcon 
+                    size={20} 
+                    color={currentTheme.textSecondary}
+                    style={styles.arrowIcon}
+                  />
                 </View>
-                <ArrowRightIcon 
-                  size={20} 
-                  color={isDarkMode ? '#A0A0A0' : '#666'} 
-                  style={styles.arrowIcon}
-                />
-              </View>
-              <Text style={styles.analysisProduct}>{analysis.productName}</Text>
-              <View style={styles.analysisFooter}>
-                <Text style={[
-                  styles.analysisResult, 
-                  { color: analysis.compliant ? '#4CAF50' : '#F44336' }
-                ]}>
-                  {analysis.result}
+                <Text style={[styles.analysisProduct, { color: currentTheme.text }]}>
+                  {analysis.productName}
                 </Text>
-                <View style={[
-                  styles.statusBadge,
-                  { 
-                    backgroundColor: analysis.compliant ? 
-                      'rgba(76, 175, 80, 0.1)' : 
-                      'rgba(244, 67, 54, 0.1)' 
-                  }
-                ]}>
+                <View style={styles.analysisFooter}>
                   <Text style={[
-                    styles.analysisStatus,
+                    styles.analysisResult, 
                     { color: analysis.compliant ? '#4CAF50' : '#F44336' }
                   ]}>
-                    {analysis.status}
+                    {analysis.result}
                   </Text>
+                  <View style={[
+                    styles.statusBadge,
+                    { 
+                      backgroundColor: analysis.compliant ? 
+                        'rgba(76, 175, 80, 0.1)' : 
+                        'rgba(244, 67, 54, 0.1)' 
+                    }
+                  ]}>
+                    <Text style={[
+                      styles.analysisStatus,
+                      { color: analysis.compliant ? '#4CAF50' : '#F44336' }
+                    ]}>
+                      {analysis.status}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
 
       <ImagePickerModal 
-        onImageSelected={handleImageSelected} 
+        onImageSelected={handleImageSelected}
+        isDarkMode={isDarkMode}
       />
 
       <Modal
@@ -165,7 +209,8 @@ export default function Index() {
         {imagePreview && (
           <ImagePreview 
             imageUri={imagePreview} 
-            onClear={clearPreview} 
+            onClear={clearPreview}
+            isDarkMode={isDarkMode}
           />
         )}
       </Modal>
@@ -285,5 +330,25 @@ const createStyles = (isDarkMode: boolean) => StyleSheet.create({
   analysisStatus: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+    backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  emptyText: {
+    fontSize: 16,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
 });
