@@ -34,6 +34,7 @@ export default function ImagePickerModal({
         allowsEditing: true,
         quality: 1,
         base64: true,
+        presentationStyle: 'overFullScreen',
       });
 
       if (!result.canceled) {
@@ -52,6 +53,7 @@ export default function ImagePickerModal({
         allowsEditing: true,
         quality: 1,
         base64: true,
+        presentationStyle: 'overFullScreen',
       });
 
       if (!result.canceled) {

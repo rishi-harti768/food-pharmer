@@ -30,7 +30,8 @@ export default function ImagePreview({
       pathname: '/analysis',
       params: { 
         image: imageUri, 
-        isDarkMode: isDarkMode ? 'true' : 'false'
+        isDarkMode: isDarkMode ? 'true' : 'false',
+        isNewAnalysis: 'true'
       }
     });
     onClear();

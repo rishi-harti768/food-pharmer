@@ -58,6 +58,7 @@ export const getAnalyses = async (): Promise<AnalysisData[]> => {
 
 export const deleteAnalysis = async (id: string): Promise<void> => {
   try {
+    await ensureStorageFile();
     const existingData = await getAnalyses();
     const updatedData = existingData.filter(analysis => analysis.id !== id);
     await FileSystem.writeAsStringAsync(STORAGE_FILE, JSON.stringify(updatedData));

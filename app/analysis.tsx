@@ -13,24 +13,65 @@ import {
   Platform,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ChevronLeftIcon, TwitterIcon, SunIcon, MoonIcon, SaveIcon } from 'lucide-react-native';
+import { ChevronLeftIcon, TwitterIcon, SunIcon, MoonIcon, SaveIcon, TrashIcon } from 'lucide-react-native';
 import { theme } from '../styles/globalStyles';
-import { saveAnalysis } from '../utils/storage';
+import { saveAnalysis, deleteAnalysis } from '../utils/storage';
 import * as Haptics from 'expo-haptics';
 
 export default function AnalysisScreen() {
-  const params = useLocalSearchParams<{ image: string; isDarkMode: string }>();
+  const params = useLocalSearchParams<{ image: string; isDarkMode: string; isNewAnalysis?: string }>();
   const systemColorScheme = useColorScheme();
   const [isDarkMode, setIsDarkMode] = useState(
     params.isDarkMode ? params.isDarkMode === 'true' : systemColorScheme === 'dark'
   );
   const [isSaving, setIsSaving] = useState(false);
+  const [hasAutoSaved, setHasAutoSaved] = useState(false);
 
   useEffect(() => {
     if (!params.isDarkMode) {
       setIsDarkMode(systemColorScheme === 'dark');
     }
   }, [systemColorScheme, params.isDarkMode]);
+
+  useEffect(() => {
+    const autoSaveAnalysis = async () => {
+      // Only auto-save if this is a new analysis and hasn't been saved yet
+      if (params.isNewAnalysis === 'true' && !hasAutoSaved && !isSaving) {
+        try {
+          setIsSaving(true);
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          
+          const analysisData = {
+            id: Date.now().toString(),
+            date: new Date().toISOString().split('T')[0],
+            productName: mockAnalysisData.productName,
+            imageUri: params.image,
+            result: mockAnalysisData.regulatoryCompliance.isCompliant ? 'Compliant' : 'Non-Compliant',
+            status: 'Completed' as const,
+            compliant: mockAnalysisData.regulatoryCompliance.isCompliant,
+            nutritionFacts: mockAnalysisData.nutritionFacts,
+            regulatoryCompliance: mockAnalysisData.regulatoryCompliance,
+            qualityScore: mockAnalysisData.qualityScore,
+            recommendedActions: mockAnalysisData.recommendedActions,
+          };
+
+          await saveAnalysis(analysisData);
+          setHasAutoSaved(true);
+
+          // Show platform-specific success notification
+          if (Platform.OS === 'android') {
+            ToastAndroid.show('Analysis saved', ToastAndroid.SHORT);
+          }
+        } catch (error) {
+          console.error('Auto-save failed:', error);
+        } finally {
+          setIsSaving(false);
+        }
+      }
+    };
+
+    autoSaveAnalysis();
+  }, [params.isNewAnalysis, hasAutoSaved]); // Only run when these dependencies change
 
   const mockAnalysisData = {
     date: '2024-02-16',
@@ -108,6 +149,34 @@ export default function AnalysisScreen() {
     }
   };
 
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Analysis',
+      'Are you sure you want to delete this analysis?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteAnalysis(mockAnalysisData.id);
+              if (Platform.OS === 'android') {
+                ToastAndroid.show('Analysis deleted', ToastAndroid.SHORT);
+              }
+              router.back();
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete analysis');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const currentTheme = isDarkMode ? theme.dark : theme.light;
   const styles = createStyles(isDarkMode);
 
@@ -145,18 +214,24 @@ export default function AnalysisScreen() {
               <MoonIcon color="white" size={24} />
             }
           </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.headerButton, styles.deleteButton]} 
+            onPress={handleDelete}
+          >
+            <TrashIcon color="white" size={24} />
+          </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.imageContainer}>
-        <Image 
-          source={{ uri: params.image }} 
-          style={styles.image} 
-          resizeMode="contain" 
-        />
-      </View>
-
       <ScrollView style={styles.analysisContainer}>
+        <View style={styles.imageContainer}>
+          <Image 
+            source={{ uri: params.image }} 
+            style={styles.image} 
+            resizeMode="contain" 
+          />
+        </View>
+
         <View style={styles.analysisSection}>
           <Text style={styles.sectionTitle}>Product Name</Text>
           <Text style={styles.sectionContent}>{mockAnalysisData.productName}</Text>
@@ -201,6 +276,7 @@ export default function AnalysisScreen() {
           <TwitterIcon color="white" size={24} />
           <Text style={styles.twitterButtonText}>Share Analysis</Text>
         </TouchableOpacity>
+        <View style={styles.bottomPadding} />
       </ScrollView>
     </View>
   );
@@ -232,7 +308,7 @@ const createStyles = (isDarkMode: boolean) => StyleSheet.create({
     marginLeft: 10,
   },
   imageContainer: {
-    height: 300,
+    minHeight: 300,
     backgroundColor: isDarkMode ? '#2C2C2C' : 'white',
     justifyContent: 'center',
     alignItems: 'center',
@@ -241,8 +317,8 @@ const createStyles = (isDarkMode: boolean) => StyleSheet.create({
     elevation: 3,
   },
   image: {
-    width: '90%',
-    height: '90%',
+    width: '100%',
+    height: 300,
   },
   analysisContainer: {
     flex: 1,
@@ -316,5 +392,11 @@ const createStyles = (isDarkMode: boolean) => StyleSheet.create({
   },
   headerButtonDisabled: {
     opacity: 0.5,
+  },
+  bottomPadding: {
+    height: 100, // Add padding at the bottom to ensure the share button is visible
+  },
+  deleteButton: {
+    backgroundColor: 'rgba(244, 67, 54, 0.1)', // Red with low opacity
   },
 });
